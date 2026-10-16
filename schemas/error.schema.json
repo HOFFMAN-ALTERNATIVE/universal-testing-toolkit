@@ -1,0 +1,7 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "error",
+  "type": "object",
+  "required": ["error"],
+  "properties": { "error": { "type": "string" }, "details": { "type": "array", "items": { "type": "string" } } }
+}

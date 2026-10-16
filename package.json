@@ -1,0 +1,39 @@
+{
+  "name": "universal-testing-toolkit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Point-and-shoot quality suite for any website: E2E, API, accessibility, visual, performance, load and security testing",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "demo": "node demo-app/server.mjs",
+    "test": "playwright test",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:e2e": "playwright test --project=chromium --project=firefox --project=webkit --project=mobile-chrome --project=mobile-safari",
+    "test:api": "playwright test --project=api",
+    "test:security": "playwright test --project=security",
+    "test:a11y": "playwright test --grep @a11y",
+    "test:visual": "playwright test --project=visual",
+    "test:visual:update": "playwright test --project=visual --update-snapshots",
+    "test:lighthouse": "lhci autorun --config=lighthouserc.cjs",
+    "test:load": "k6 run k6/load.js",
+    "test:zap": "bash scripts/zap-baseline.sh",
+    "report": "playwright show-report reports/playwright",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "@eslint/js": "^9.12.0",
+    "@lhci/cli": "^0.15.1",
+    "@playwright/test": "1.64.1",
+    "@types/node": "^22.7.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "eslint": "^9.12.0",
+    "globals": "^15.11.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.8.0"
+  }
+}

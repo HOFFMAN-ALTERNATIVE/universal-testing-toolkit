@@ -1,0 +1,126 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  FORCE_COLOR: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: sudo apt-get install -y -qq shellcheck && shellcheck scripts/*.sh
+
+  playwright:
+    name: playwright (${{ matrix.project }})
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit, mobile-chrome, mobile-safari, api, security]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - name: Install browser
+        if: ${{ !contains(fromJSON('["api","security"]'), matrix.project) }}
+        run: |
+          case "${{ matrix.project }}" in
+            firefox) b=firefox ;; webkit|mobile-safari) b=webkit ;; *) b=chromium ;;
+          esac
+          npx playwright install --with-deps "$b"
+      - run: npx playwright test --project=${{ matrix.project }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ matrix.project }}
+          path: reports/
+          retention-days: 14
+
+  visual:
+    needs: lint
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npx playwright test --project=visual
+        env: { HOME: /root }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: visual-report, path: reports/, retention-days: 14 }
+
+  lighthouse:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run test:lighthouse
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: lighthouse-report, path: reports/lighthouse/, retention-days: 14 }
+
+  k6:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: grafana/setup-k6-action@v1
+      - name: Start demo app
+        run: |
+          node demo-app/server.mjs &
+          npx --yes wait-on -t 30000 http://127.0.0.1:3000/api/health
+      - name: smoke
+        run: mkdir -p reports/k6 && k6 run k6/smoke.js
+      - name: load (scaled)
+        run: k6 run -e SCALE=0.1 -e VUS=20 k6/load.js
+        env: { K6_WEB_DASHBOARD: "true", K6_WEB_DASHBOARD_EXPORT: reports/k6/load.html }
+      - name: spike (scaled)
+        run: k6 run -e SCALE=0.2 -e VUS=60 k6/spike.js
+        env: { K6_WEB_DASHBOARD: "true", K6_WEB_DASHBOARD_EXPORT: reports/k6/spike.html }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: k6-report, path: reports/k6/, retention-days: 14 }
+
+  zap:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start demo app
+        run: |
+          node demo-app/server.mjs &
+          npx --yes wait-on -t 30000 http://127.0.0.1:3000/api/health
+      - run: bash scripts/zap-baseline.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: zap-report, path: reports/zap/, retention-days: 14 }
+
+  docker:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run the all-in-one runner against the dockerised demo app
+        run: docker compose up --build --abort-on-container-exit --exit-code-from runner
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: docker-run-report, path: reports/, retention-days: 7 }
