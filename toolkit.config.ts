@@ -19,6 +19,11 @@ export const toolkit = {
   checkExternalLinks: process.env.CHECK_EXTERNAL_LINKS === "1",
   /** API base path (relative to BASE_URL). */
   apiBase: process.env.API_BASE ?? "/api",
+  /**
+   * Console messages that are browser notices rather than app errors (regex sources).
+   * Default ignores Chrome's COOP warning on plain-HTTP non-localhost origins (e.g. docker hostnames).
+   */
+  ignoreConsole: list(process.env.IGNORE_CONSOLE, ["Cross-Origin-Opener-Policy header has been ignored"]).map((s) => new RegExp(s)),
   /** Contact form path; set to "" to skip form tests on targets without one. */
   contactPath: process.env.CONTACT_PATH ?? "/contact",
 } as const;

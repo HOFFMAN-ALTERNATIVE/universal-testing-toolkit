@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import { toolkit } from "../../../toolkit.config";
 
 export class BasePage {
   readonly nav: Locator;
@@ -8,7 +9,9 @@ export class BasePage {
   constructor(readonly page: Page) {
     this.nav = page.getByRole("navigation", { name: "Main" });
     this.main = page.locator("main");
-    page.on("console", (m) => { if (m.type() === "error") this.consoleErrors.push(m.text()); });
+    page.on("console", (m) => {
+      if (m.type() === "error" && !toolkit.ignoreConsole.some((re) => re.test(m.text()))) this.consoleErrors.push(m.text());
+    });
     page.on("pageerror", (e) => this.consoleErrors.push(e.message));
   }
 
