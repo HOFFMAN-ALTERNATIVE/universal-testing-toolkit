@@ -1,9 +1,10 @@
 # All-in-one runner: Playwright browsers + k6 + Lighthouse CI.
 FROM mcr.microsoft.com/playwright:v1.64.1-noble
 ARG K6_VERSION=2.3.0
+ARG TARGETARCH=amd64
 RUN apt-get update && apt-get install -y --no-install-recommends make && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz" \
-    | tar -xz --strip-components=1 -C /usr/local/bin "k6-v${K6_VERSION}-linux-amd64/k6" \
+RUN curl -fsSL "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-${TARGETARCH}.tar.gz" \
+    | tar -xz --strip-components=1 -C /usr/local/bin "k6-v${K6_VERSION}-linux-${TARGETARCH}/k6" \
  && k6 version
 WORKDIR /suite
 COPY package.json package-lock.json ./

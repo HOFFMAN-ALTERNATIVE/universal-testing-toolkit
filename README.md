@@ -121,6 +121,15 @@ scripts/       OWASP ZAP wrapper
 
 Load tests and ZAP scans generate real traffic. Only run them against systems you own or are authorised to test.
 
+## Container image
+
+Multi-arch (amd64/arm64) images are published to GitHub Container Registry on every release:
+
+```bash
+docker pull ghcr.io/hoffman-alternative/universal-testing-toolkit:latest
+docker pull ghcr.io/hoffman-alternative/universal-testing-toolkit-demo-app:latest
+```
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
