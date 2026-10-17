@@ -1,11 +1,18 @@
 # docker compose up --build --abort-on-container-exit
+# Create ./reports first (mkdir -p reports) so it is owned by your user; the
+# runner writes to it as uid 1000.
 services:
   demo-app:
     build: ./demo-app
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
       interval: 5s
+      timeout: 3s
       retries: 10
   runner:
     build: .
@@ -13,6 +20,7 @@ services:
       demo-app: { condition: service_healthy }
     environment:
       BASE_URL: http://demo-app:3000
+    security_opt: ["no-new-privileges:true"]
     volumes:
       - ./reports:/suite/reports
     command: ["ci-fast"]

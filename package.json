@@ -5,7 +5,9 @@
   "description": "Point-and-shoot quality suite for any website: E2E, API, accessibility, visual, performance, load and security testing",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "demo": "node demo-app/server.mjs",
     "test": "playwright test",
@@ -21,7 +23,8 @@
     "test:zap": "bash scripts/zap-baseline.sh",
     "report": "playwright show-report reports/playwright",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:demo": "node --test demo-app/"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.0",
@@ -35,5 +38,10 @@
     "globals": "^15.11.0",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.8.0"
+  },
+  "overrides": {
+    "tmp": "^0.2.7",
+    "basic-ftp": "^6.2.3",
+    "uuid": "^11.1.1"
   }
 }

@@ -1,7 +1,7 @@
 // Demo target app for universal-testing-toolkit. Zero dependencies (Node >= 20).
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { extname, join, normalize, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 
 const PORT = Number(process.env.PORT || 3000);
@@ -26,6 +26,10 @@ for (const [name, price] of [["Keyboard", 79.9], ["Monitor", 249], ["Headset", 5
   items.set(id, { id, name, price, createdAt: new Date().toISOString() });
 }
 const messages = [];
+// In-memory demo store: bounded so a load test or a hostile client cannot grow
+// the heap until the container is OOM-killed.
+const MAX_ITEMS = 1000;
+const MAX_MESSAGES = 100;
 
 function send(res, status, body, type = "application/json; charset=utf-8", extra = {}) {
   const payload = typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
@@ -73,6 +77,7 @@ async function api(req, res, url) {
       const body = await readBody(req);
       const errors = validateItem(body);
       if (errors.length) return send(res, 422, { error: "validation_failed", details: errors });
+      if (items.size >= MAX_ITEMS) return send(res, 507, { error: "store_full" });
       const item = { id: randomUUID(), name: body.name.trim(), price: body.price, createdAt: new Date().toISOString() };
       items.set(item.id, item);
       return send(res, 201, item, undefined, { Location: `/api/items/${item.id}` });
@@ -94,7 +99,8 @@ async function contact(req, res) {
     const list = Object.values(errors).map((e) => `<li>${escapeHtml(e)}</li>`).join("");
     return send(res, 422, tpl.replace("<!--STATUS-->", `<div class="alert alert--error" role="alert"><p>Please fix the following:</p><ul>${list}</ul></div>`), TYPES[".html"]);
   }
-  messages.push({ ...body, at: Date.now() });
+  messages.push({ name: String(body.name), email: String(body.email), message: String(body.message).slice(0, 2000), at: Date.now() });
+  if (messages.length > MAX_MESSAGES) messages.shift();
   return send(res, 200, tpl.replace("<!--STATUS-->", `<div class="alert alert--ok" role="status">Thanks, ${escapeHtml(body.name)}! Your message has been received.</div>`), TYPES[".html"]);
 }
 
@@ -102,7 +108,7 @@ async function staticFile(req, res, url) {
   let p = url.pathname === "/" ? "/index.html" : url.pathname;
   if (!extname(p)) p += ".html";
   const file = normalize(join(PUBLIC, p));
-  if (!file.startsWith(PUBLIC)) return send(res, 403, "Forbidden", TYPES[".txt"]);
+  if (!file.startsWith(PUBLIC + sep)) return send(res, 403, "Forbidden", TYPES[".txt"]);
   try {
     const data = await readFile(file);
     return send(res, 200, data, TYPES[extname(file)] || "application/octet-stream");
@@ -113,18 +119,35 @@ async function staticFile(req, res, url) {
 }
 
 export const server = createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   try {
+    // Fixed base: a malformed Host header must not be able to throw here.
+    const url = new URL(req.url, "http://localhost");
     if (url.pathname.startsWith("/api/")) return await api(req, res, url);
     if (url.pathname === "/contact" && req.method === "POST") return await contact(req, res);
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method Not Allowed", TYPES[".txt"], { Allow: "GET, HEAD" });
     return await staticFile(req, res, url);
   } catch (e) {
-    return send(res, e.status || 500, { error: e.message || "internal_error" });
+    if (e.status && e.status < 500) return send(res, e.status, { error: e.message });
+    console.error(JSON.stringify({ level: "error", msg: "unhandled", method: req.method, path: req.url, err: String(e?.stack || e) }));
+    if (!res.headersSent) return send(res, 500, { error: "internal_error" });
+    res.destroy();
   }
 });
 
+// Slowloris and idle-connection limits (Node defaults are 300 s / 60 s).
+server.requestTimeout = 15_000;
+server.headersTimeout = 10_000;
+server.keepAliveTimeout = 5_000;
+
 if (process.argv[1] === import.meta.filename) {
   server.listen(PORT, () => console.log(`demo-app listening on http://localhost:${PORT}`));
-  for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => server.close(() => process.exit(0)));
+  // Graceful shutdown: stop accepting, let in-flight requests finish, force
+  // exit after 10 s so a stuck client cannot block a deploy.
+  for (const sig of ["SIGINT", "SIGTERM"]) {
+    process.once(sig, () => {
+      server.close(() => process.exit(0));
+      server.closeIdleConnections();
+      setTimeout(() => process.exit(1), 10_000).unref();
+    });
+  }
 }

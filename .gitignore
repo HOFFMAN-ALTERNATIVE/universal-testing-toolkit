@@ -3,3 +3,4 @@ reports/
 .lighthouseci/
 test-results/
 playwright-report/
+.env
